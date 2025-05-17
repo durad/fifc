@@ -21,60 +21,68 @@ function _fifc
     end
 
     complete -C $complete_opts -- "$fifc_commandline" | string split '\n' >$_fifc_complist_path
+    set -l complist (string escape -- (_fifc_expand_tilde (_fifc_parse_complist)))
+    set -l complist_count (count $complist)
 
-    set -gx fifc_group (_fifc_completion_group)
-    set source_cmd (_fifc_action source)
+    # Run fzf only if we have some completions from fish
+    if [ $complist_count = 0 ]
+        # echo -n \a # beep
+    else
+        set -gx fifc_group (_fifc_completion_group $complist)
 
-    set fifc_fzf_query (string trim --chars '\'' -- "$fifc_fzf_query")
+        set source_cmd (_fifc_action source)
 
-    set -l fzf_cmd "
-        _fifc_launched_by_fzf=1 SHELL=fish fzf \
-            -d \t \
-            --exact \
-            --tiebreak=length \
-            --select-1 \
-            --exit-0 \
-            --ansi \
-            --tabstop=4 \
-            --multi \
-            --reverse \
-            --header '$header' \
-            --preview '_fifc_action preview {} {q}' \
-            --bind='$fifc_open_keybinding:execute(_fifc_action open {} {q} &> /dev/tty)' \
-            --query '$fifc_query' \
-            $_fifc_custom_fzf_opts"
+        set fifc_fzf_query (string trim --chars '\'' -- "$fifc_fzf_query")
 
-    set -l cmd (string join -- " | " $source_cmd $fzf_cmd)
-    # We use eval hack because wrapping source command
-    # inside a function cause some delay before fzf to show up
-    eval $cmd | while read -l token
-        # don't escape '~' for path, `$` for environ
-        if string match --quiet '~*' -- $token
-            set -a result (string join -- "" "~" (string sub --start 2 -- $token | string escape))
-        else if string match --quiet '$*' -- $token
-            set -a result (string join -- "" "\$" (string sub --start 2 -- $token | string escape))
-        else
-            set -a result (string escape --no-quoted -- $token)
+        set -l fzf_cmd "
+            _fifc_launched_by_fzf=1 SHELL=fish fzf \
+                -d \t \
+                --exact \
+                --tiebreak=length \
+                --select-1 \
+                --exit-0 \
+                --ansi \
+                --tabstop=4 \
+                --multi \
+                --reverse \
+                --header '$header' \
+                --preview '_fifc_action preview {} {q}' \
+                --bind='$fifc_open_keybinding:execute(_fifc_action open {} {q} &> /dev/tty)' \
+                --query '$fifc_query' \
+                $_fifc_custom_fzf_opts"
+
+        set -l cmd (string join -- " | " $source_cmd $fzf_cmd)
+        # We use eval hack because wrapping source command
+        # inside a function cause some delay before fzf to show up
+        eval $cmd | while read -l token
+            # don't escape '~' for path, `$` for environ
+            if string match --quiet '~*' -- $token
+                set -a result (string join -- "" "~" (string sub --start 2 -- $token | string escape))
+            else if string match --quiet '$*' -- $token
+                set -a result (string join -- "" "\$" (string sub --start 2 -- $token | string escape))
+            else
+                set -a result (string escape --no-quoted -- $token)
+            end
+            # Perform extraction if needed
+            if test -n "$_fifc_extract_regex"
+                set result[-1] (string match --regex --groups-only -- "$_fifc_extract_regex" "$token")
+            end
         end
-        # Perform extraction if needed
-        if test -n "$_fifc_extract_regex"
-            set result[-1] (string match --regex --groups-only -- "$_fifc_extract_regex" "$token")
-        end
-    end
 
-    # Add space trailing space only if:
-    # - there is no trailing space already present
-    # - Result is not a directory
-    # We need to unescape $result for directory test as we escaped it before
-    if test (count $result) -eq 1; and not test -d (string unescape -- $result[1])
-        set -l buffer (string split -- "$fifc_commandline" (commandline -b))
-        if not string match -- ' *' "$buffer[2]"
-            set -a result ''
+        # Add space trailing space only if:
+        # - there is no trailing space already present
+        # - Result is not a directory
+        # We need to unescape $result for directory test as we escaped it before
+        if test (count $result) -eq 1; and not test -d (string unescape -- $result[1])
+            set -l buffer (string split -- "$fifc_commandline" (commandline -b))
+            if not string match -- ' *' "$buffer[2]"
+                set -a result ''
+            end
         end
-    end
 
-    if test -n "$result"
-        commandline --replace --current-token -- (string join -- ' ' $result)
+        if test -n "$result"
+            commandline --replace --current-token -- (string join -- ' ' $result)
+        end
     end
 
     commandline --function repaint

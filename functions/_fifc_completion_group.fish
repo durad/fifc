@@ -1,4 +1,5 @@
 function _fifc_completion_group -d "Determine completion group"
+    set -l complist $argv
     set -l path_candidate (_fifc_path_to_complete)
     # Null means that either $path is empty or is not a directory
     set -l is_null (ls -A -- $path_candidate 2> /dev/null | string collect)
