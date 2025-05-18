@@ -26,7 +26,8 @@ function _fifc
 
     # Run fzf only if we have some completions from fish
     if [ $complist_count = 0 ]
-        # echo -n \a # beep
+        # If there are no completions trigger built-in complete to get current command line to blink
+        commandline --function complete
     else
         set -gx fifc_group (_fifc_completion_group $complist)
 
@@ -83,9 +84,10 @@ function _fifc
         if test -n "$result"
             commandline --replace --current-token -- (string join -- ' ' $result)
         end
+
+        commandline --function repaint
     end
 
-    commandline --function repaint
 
     rm $_fifc_complist_path
     # Clean state
